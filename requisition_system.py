@@ -1,18 +1,25 @@
 # ==============================================================================
-# Requisition System - Assessment 2: Task 1
+# BACT7501 - Assessment 2: Software Development Project
+# Task 1: Purchase Requisition System (OOP Prototype)
 # ==============================================================================
 
-# Global variable to generate unique requisition IDs starting from 10000
+# Global counter for generating unique requisition IDs starting from 10000
 requisition_counter = 0
 
 
 class RequisitionSystem:
+    """
+    Encapsulates all functionality and data for a purchase requisition,
+    including data entry, automatic approval checks, manager responses,
+    display, and statistical tracking.
+    """
+
     # Class-level list to track all created requisition objects
     all_requisitions = []
 
     def __init__(self, date="", staff_id="", staff_name=""):
         """
-        Initializes shared data for a requisition.
+        Initializes shared data attributes for the requisition instance.
         """
         self.date = date
         self.staff_id = staff_id
@@ -23,38 +30,42 @@ class RequisitionSystem:
         self.status = "Pending"
         self.approval_reference = "Not available"
 
-        # Track this instance in the shared list
+        # Register instance in the shared collection
         RequisitionSystem.all_requisitions.append(self)
 
     def add_requisition(self, date=None, staff_id=None, staff_name=None, items=None, total=None):
         """
-        Allows staff to submit basic information and items with costs.
-        Calculates and returns the total amount.
-        Can be used interactively or with parameters for testing.
+        Submits basic requisition information, accepts items with their cost,
+        computes the total, automatically triggers approval evaluation,
+        and returns the total amount.
         """
         global requisition_counter
 
-        # Generate unique Requisition ID (e.g., 10001, 10002)
+        # Increment global counter and assign unique Requisition ID
         requisition_counter += 1
         self.requisition_id = 10000 + requisition_counter
 
-        # If data is passed as arguments (for testing/direct input)
+        # Programmatic input (used for testing and automated runs)
         if date is not None and staff_id is not None and staff_name is not None:
-            self.date = date
-            self.staff_id = staff_id
-            self.staff_name = staff_name
-            if items is not None:
+            self.date = str(date).strip()
+            self.staff_id = str(staff_id).strip()
+            self.staff_name = str(staff_name).strip()
+
+            if items is not None and isinstance(items, list):
                 self.items = items
-                self.total = sum(item["price"] for item in items)
+                self.total = sum(float(item.get("price", 0.0)) for item in items)
             elif total is not None:
-                self.items = [{"name": "Requisition Items", "price": total}]
-                self.total = total
+                self.total = float(total)
+                self.items = [{"name": "Requisition Items", "price": self.total}]
+            else:
+                self.items = []
+                self.total = 0.0
         else:
-            # Interactive prompt for user input
+            # Interactive input for staff
             print("\n--- Enter Requisition Information ---")
-            self.date = input("Enter Date (e.g., DD/MM/YYYY): ")
-            self.staff_id = input("Enter Staff ID: ")
-            self.staff_name = input("Enter Staff Name: ")
+            self.date = input("Enter Date (e.g., DD/MM/YYYY): ").strip()
+            self.staff_id = input("Enter Staff ID: ").strip()
+            self.staff_name = input("Enter Staff Name: ").strip()
 
             print(f"Requisition ID: {self.requisition_id}")
             self.items = []
@@ -62,38 +73,51 @@ class RequisitionSystem:
 
             print("\nAdd Items to Requisition:")
             while True:
-                item_name = input("Enter item name: ")
-                item_price = float(input("Enter item price ($): "))
+                item_name = input("Enter item name: ").strip()
+                while not item_name:
+                    print("Item name cannot be empty.")
+                    item_name = input("Enter item name: ").strip()
+
+                # Edge case handling: Validate numeric and non-negative price
+                while True:
+                    try:
+                        item_price = float(input("Enter item price ($): "))
+                        if item_price < 0:
+                            print("Price cannot be negative. Please enter a valid amount.")
+                            continue
+                        break
+                    except ValueError:
+                        print("Invalid input. Please enter a valid numerical price.")
 
                 self.items.append({"name": item_name, "price": item_price})
                 self.total += item_price
 
-                another = input("Do you want to add another item? (yes/no): ")
-                if another.strip().lower() != "yes":
+                another = input("Do you want to add another item? (yes/no): ").strip().lower()
+                if another != "yes":
                     break
 
-        # Automatically decide approval status based on total
+        # Automatically determine initial approval status based on total
         self.approve_requisition()
         return self.total
 
-    def requisitions_details(self):
+    def requisitions_details(self, *args, **kwargs):
         """
-        Alias for add_requisition.
+        Alias for add_requisition to match specification naming.
         """
-        return self.add_requisition()
+        return self.add_requisition(*args, **kwargs)
 
     def approve_requisition(self):
         """
-        Decides if a requisition is approved or not based on total:
-        - If total < 500: status is 'Approved' with Approval Reference Number.
-        - If total >= 500: status is 'Pending' and Approval Reference is 'Not available'.
+        Decides if a requisition is approved based on the total:
+        - If total < 500: status is 'Approved' and approval reference number is generated.
+        - If total >= 500: status is 'Pending' and approval reference is 'Not available'.
         """
         req_id_str = str(self.requisition_id)
         last_three = req_id_str[-3:]
 
         if self.total < 500:
             self.status = "Approved"
-            self.approval_reference = self.staff_id + last_three
+            self.approval_reference = f"{self.staff_id}{last_three}"
         else:
             self.status = "Pending"
             self.approval_reference = "Not available"
@@ -103,16 +127,16 @@ class RequisitionSystem:
     def respond_requisition(self, decision):
         """
         Allows a manager to respond to a pending requisition:
-        - 'Approved': updates status to 'Approved' and assigns Approval Reference Number.
-        - 'Not approved': updates status to 'Not approved' and Reference is 'Not available'.
-        - 'Pending': status remains 'Pending' and Reference is 'Not available'.
+        - 'Approved': updates status to 'Approved' and generates approval reference number.
+        - 'Not approved': updates status to 'Not approved' and reference remains 'Not available'.
+        - 'Pending': leaves status as 'Pending' and reference as 'Not available'.
         """
-        clean_decision = decision.strip().lower()
+        clean_decision = str(decision).strip().lower()
         last_three = str(self.requisition_id)[-3:]
 
         if clean_decision == "approved":
             self.status = "Approved"
-            self.approval_reference = self.staff_id + last_three
+            self.approval_reference = f"{self.staff_id}{last_three}"
         elif clean_decision in ["not approved", "not_approved", "rejected"]:
             self.status = "Not approved"
             self.approval_reference = "Not available"
@@ -124,7 +148,7 @@ class RequisitionSystem:
 
     def display_requisition(self):
         """
-        Displays requisition information in the required output format.
+        Displays a single requisition matching the exact specification output format.
         """
         formatted_total = f"${int(self.total)}" if self.total == int(self.total) else f"${self.total:.2f}"
         print(f"Date: {self.date}")
@@ -139,7 +163,7 @@ class RequisitionSystem:
     @classmethod
     def display_requisitions(cls):
         """
-        Prints information for all the requisition objects.
+        Prints formatted information for all requisition objects.
         """
         for req in cls.all_requisitions:
             req.display_requisition()
@@ -147,11 +171,12 @@ class RequisitionSystem:
     @classmethod
     def requisition_statistics(cls):
         """
-        Tracks and displays statistical information:
-        - Total number of requisitions submitted
-        - Total number of approved requisitions
-        - Total number of pending requisitions
-        - Total number of not approved requisitions
+        Aggregates and displays statistical information:
+        - The total number of requisitions submitted
+        - The total number of approved requisitions
+        - The total number of pending requisitions
+        - The total number of not approved requisitions
+        Returns a dictionary containing the counts.
         """
         total_count = len(cls.all_requisitions)
         approved_count = sum(1 for req in cls.all_requisitions if req.status.lower() == "approved")
@@ -180,7 +205,7 @@ if __name__ == "__main__":
     # --------------------------------------------------------------------------
     # 1. Create at least 5 requisition instances covering different scenarios
     # --------------------------------------------------------------------------
-    
+
     # Requisition 1: Total < $500 (Auto-Approved)
     req1 = RequisitionSystem()
     req1.add_requisition(date="03/04/2024", staff_id="FN19", staff_name="John Paul", total=450)
@@ -189,15 +214,15 @@ if __name__ == "__main__":
     req2 = RequisitionSystem()
     req2.add_requisition(date="03/05/2024", staff_id="FN02", staff_name="Catlin White", total=490)
 
-    # Requisition 3: Total >= $500 (Pending)
+    # Requisition 3: Total >= $500 (Initially Pending)
     req3 = RequisitionSystem()
     req3.add_requisition(date="05/04/2024", staff_id="FN20", staff_name="Tracy Brown", total=1000)
 
-    # Requisition 4: Total >= $500 (Pending)
+    # Requisition 4: Total >= $500 (Initially Pending)
     req4 = RequisitionSystem()
     req4.add_requisition(date="07/05/2024", staff_id="FN15", staff_name="Emma Wellington", total=3500)
 
-    # Requisition 5: Total >= $500 (Pending)
+    # Requisition 5: Total >= $500 (Initially Pending)
     req5 = RequisitionSystem()
     req5.add_requisition(date="12/05/2024", staff_id="FN33", staff_name="David Clark", total=850)
 
